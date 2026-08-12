@@ -40,6 +40,17 @@ const MUESTREO_SALIDA = 24000;
 const UMBRAL_VOZ = 0.012;
 const SILENCIO_MS = 450;
 
+/**
+ * Herramientas declaradas `NON_BLOCKING`.
+ *
+ * Fuente única de verdad: la declaración de la herramienta y la respuesta que
+ * se le envía tienen que coincidir. El campo `scheduling` SÓLO es válido en la
+ * respuesta de una función no bloqueante; mandarlo en una bloqueante hace que
+ * el servidor cierre la sesión con 1011 (internal error) a mitad de la llamada.
+ * Antes eran dos listas separadas y se desincronizaron en la ruta de error.
+ */
+const NO_BLOQUEANTES = new Set(['consultar_conocimiento_clinico']);
+
 export class SesionCentinela {
   private client!: GoogleGenAI;
   private session: Session | null = null;
@@ -57,6 +68,22 @@ export class SesionCentinela {
 
   private slots: SlotsSintomas = {};
   private grabando = false;
+
+  /**
+   * Si el socket sigue vivo. `this.session` no sirve para saberlo: el objeto
+   * sobrevive al cierre del WebSocket, así que sin esta bandera el micrófono
+   * sigue empujando audio a un socket muerto ~23 veces por segundo.
+   */
+  private viva = false;
+
+  /**
+   * IDs de llamadas a herramienta que el servidor canceló.
+   *
+   * Ocurre de forma natural: el paciente interrumpe mientras el agente está
+   * consultando el corpus, el turno se descarta y con él la llamada pendiente.
+   * Responder a un id ya cancelado también cierra la sesión con 1011.
+   */
+  private cancelados = new Set<string>();
 
   // --- medición de latencia (§5 de la rúbrica) -----------------------------
   private hablandoPaciente = false;
@@ -106,18 +133,28 @@ export class SesionCentinela {
       config: this.configuracion(),
       callbacks: {
         onopen: () => {
+          this.viva = true;
           this.ev.conectado(true);
           this.ev.estado('Conectado. Active el micrófono para hablar.');
         },
         onmessage: (m) => void this.alRecibir(m),
         onerror: (e: any) => {
           console.error('[live] error', e);
+          this.alMorir();
           this.ev.estado(`Error de conexión: ${e?.message ?? 'desconocido'}`, 'error');
-          this.ev.conectado(false);
         },
         onclose: (e: any) => {
-          this.ev.conectado(false);
-          this.ev.estado(`Sesión cerrada (${e?.code ?? '—'}). ${e?.reason ?? ''}`.trim());
+          this.alMorir();
+          const codigo = e?.code ?? '—';
+          // 1000 es un cierre limpio (colgamos nosotros); cualquier otro es caída.
+          if (codigo === 1000) {
+            this.ev.estado('Llamada finalizada.');
+          } else {
+            this.ev.estado(
+              `Se cayó la conexión con el agente (${codigo}). Pulse «Iniciar llamada» para retomar.`,
+              'error',
+            );
+          }
         },
       },
     });
@@ -165,7 +202,11 @@ export class SesionCentinela {
         name: 'consultar_conocimiento_clinico',
         // Asíncrona: el modelo sigue conversando mientras el backend recupera y
         // razona, en vez de dejar un silencio de ~1 s en plena llamada.
-        behavior: Behavior.NON_BLOCKING,
+        // El `behavior` sale de NO_BLOQUEANTES para que no pueda divergir de la
+        // respuesta que se envía en `despachar`.
+        behavior: NO_BLOQUEANTES.has('consultar_conocimiento_clinico')
+          ? Behavior.NON_BLOCKING
+          : undefined,
         description:
           'Consulta la base de conocimiento clínico para responder una duda del paciente o para orientar sobre un síntoma. Devuelve el campo `decir`, que debes pronunciar tal cual.',
         parameters: {
@@ -211,6 +252,13 @@ export class SesionCentinela {
   // -------------------------------------------------------------------------
 
   private async alRecibir(m: LiveServerMessage): Promise<void> {
+    // Debe evaluarse ANTES de despachar: si en el mismo mensaje llega una
+    // cancelación, la respuesta correspondiente ya no debe salir.
+    const cancelacion = (m as any).toolCallCancellation?.ids as string[] | undefined;
+    if (cancelacion?.length) {
+      for (const id of cancelacion) this.cancelados.add(id);
+    }
+
     if (m.toolCall?.functionCalls?.length) {
       for (const fc of m.toolCall.functionCalls) void this.despachar(fc);
     }
@@ -337,14 +385,33 @@ export class SesionCentinela {
         decir:
           'Perdóneme, tuve un inconveniente técnico para verificar eso. Prefiero que lo revise una enfermera.',
       };
-      scheduling = FunctionResponseScheduling.INTERRUPT;
+      // Ojo: no se fija `scheduling` aquí. Este catch cubre las cuatro
+      // herramientas y tres de ellas son bloqueantes; el filtro de abajo es el
+      // que decide si el campo puede viajar.
     }
 
-    this.session?.sendToolResponse({
-      functionResponses: [
-        { id: fc.id, name: fc.name, response: respuesta, ...(scheduling ? { scheduling } : {}) } as any,
-      ],
-    });
+    // `scheduling` sólo viaja en respuestas de herramientas no bloqueantes.
+    const puedeAgendar = Boolean(fc.name && NO_BLOQUEANTES.has(fc.name));
+    const agendado = puedeAgendar && scheduling ? { scheduling } : {};
+
+    if (!this.viva) return; // la sesión ya murió: enviar aquí sólo genera ruido
+
+    // El servidor descartó esta llamada (típicamente el paciente interrumpió
+    // mientras se consultaba el corpus). Responderla cerraría la sesión.
+    if (fc.id && this.cancelados.has(fc.id)) {
+      this.cancelados.delete(fc.id);
+      return;
+    }
+
+    try {
+      this.session?.sendToolResponse({
+        functionResponses: [
+          { id: fc.id, name: fc.name, response: respuesta, ...agendado } as any,
+        ],
+      });
+    } catch (e) {
+      console.warn(`[herramienta ${fc.name}] no se pudo entregar la respuesta:`, e);
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -365,10 +432,18 @@ export class SesionCentinela {
     this.procesador = this.ctxEntrada.createScriptProcessor(2048, 1, 1);
 
     this.procesador.onaudioprocess = (e) => {
-      if (!this.grabando) return;
+      if (!this.grabando || !this.viva) return;
       const pcm = e.inputBuffer.getChannelData(0);
       this.detectarVoz(pcm);
-      this.session?.sendRealtimeInput({ media: createBlob(pcm) });
+      try {
+        this.session?.sendRealtimeInput({ media: createBlob(pcm) });
+      } catch (err) {
+        // El socket se cayó entre el guard y el envío: se corta el micrófono en
+        // vez de repetir el fallo 23 veces por segundo.
+        this.viva = false;
+        console.warn('[live] envío de audio abortado, la sesión ya no está viva:', err);
+        this.detenerMicrofono();
+      }
     };
 
     this.fuente.connect(this.procesador);
@@ -432,6 +507,18 @@ export class SesionCentinela {
       this.reproduciendo.delete(f);
     }
     this.siguienteInicio = 0;
+  }
+
+  /**
+   * La sesión dejó de estar viva (cierre limpio, caída o error). Corta el
+   * micrófono para que no siga empujando audio a un socket muerto, que es lo
+   * que producía la cascada de "WebSocket is already in CLOSING or CLOSED".
+   */
+  private alMorir(): void {
+    this.viva = false;
+    this.ev.conectado(false);
+    if (this.grabando) this.detenerMicrofono();
+    this.detenerReproduccion();
   }
 
   detenerMicrofono(): void {
