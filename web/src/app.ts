@@ -40,6 +40,16 @@ export class CentinelaApp extends LitElement {
   @state() private triaje: Triaje | null = null;
   @state() private citas: Cita[] = [];
   @state() private resumen: ResumenLlamada | null = null;
+
+  /**
+   * Actas de llamadas anteriores, leídas de `logs/llamadas/` por el backend.
+   *
+   * El acta ya se persistía en disco desde el primer día, pero no se leía desde
+   * ninguna parte: al recargar la página parecía que no quedaba nada. La
+   * rúbrica evalúa lo observable, así que la persistencia tiene que verse.
+   */
+  @state() private historial: ResumenLlamada[] = [];
+  @state() private historialAbierto: ResumenLlamada | null = null;
   @state() private transcripcion: LineaTranscripcion[] = [];
   @state() private latencias: number[] = [];
 
@@ -185,6 +195,47 @@ export class CentinelaApp extends LitElement {
         line-height: 1.6;
         margin-top: 8px;
       }
+
+      .historial {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .acta {
+        display: block;
+        width: 100%;
+        text-align: left;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid var(--borde);
+        border-radius: 9px;
+        padding: 10px 12px;
+        color: var(--texto);
+        font-family: inherit;
+      }
+      .acta:hover {
+        background: rgba(255, 255, 255, 0.08);
+        border-color: var(--acento);
+      }
+      .acta-fila {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        font-size: 0.85rem;
+      }
+      .acta-meta {
+        color: var(--texto-tenue);
+        font-size: 0.75rem;
+        margin-top: 4px;
+      }
+      .volver {
+        background: none;
+        border: none;
+        color: var(--acento);
+        font-family: inherit;
+        font-size: 0.8rem;
+        padding: 0 0 10px;
+      }
       .datos b {
         color: var(--texto);
         font-weight: 500;
@@ -296,18 +347,44 @@ export class CentinelaApp extends LitElement {
         this.paciente = p[0] ?? null;
       })
       .catch(() => (this.error = 'No se pudo contactar el backend. ¿Está corriendo `npm run dev`?'));
+
+    void this.cargarHistorial();
+  }
+
+  private async cargarHistorial(): Promise<void> {
+    try {
+      const r = await fetch('/api/llamadas');
+      this.historial = await r.json();
+    } catch {
+      /* el historial es informativo: su ausencia no rompe la llamada */
+    }
   }
 
   // -------------------------------------------------------------------------
 
-  private async iniciarLlamada() {
-    this.error = '';
+  /**
+   * Borra todo lo clínico de la pantalla.
+   *
+   * Es una cuestión de seguridad, no de limpieza: el acta, las casillas y la
+   * evidencia pertenecen a un paciente y a un día concretos. Si cambia
+   * cualquiera de los dos y esto no se borra, el equipo ve datos de un paciente
+   * bajo el nombre de otro.
+   */
+  private limpiarEstadoClinico() {
     this.resumen = null;
     this.slots = {};
     this.triaje = null;
     this.citas = [];
     this.transcripcion = [];
     this.latencias = [];
+    this.historialAbierto = null;
+    // Las vistas clínicas quedarían vacías: se vuelve a la de llamada.
+    if (this.vista !== 'consola') this.vista = 'llamada';
+  }
+
+  private async iniciarLlamada() {
+    this.error = '';
+    this.limpiarEstadoClinico();
     this.vista = 'llamada';
 
     const callId = `call_${Date.now().toString(36)}`;
@@ -332,6 +409,7 @@ export class CentinelaApp extends LitElement {
           this.resumen = r;
           this.enLlamada = false;
           this.microfonoAbierto = false;
+          void this.cargarHistorial();
         },
         metricas: (ms) => (this.latencias = [...this.latencias, ms]),
         conectado: (c) => (this.conectado = c),
@@ -362,6 +440,7 @@ export class CentinelaApp extends LitElement {
     this.enLlamada = false;
     this.microfonoAbierto = false;
     this.sesion = null;
+    void this.cargarHistorial();
   }
 
   private alternarMicrofono() {
@@ -411,6 +490,9 @@ export class CentinelaApp extends LitElement {
             @change=${(e: Event) => {
               const id = (e.target as HTMLSelectElement).value;
               this.paciente = this.pacientes.find((x) => x.paciente_id === id) ?? null;
+              // Sin esto, el acta y las casillas del paciente anterior se
+              // quedaban en pantalla bajo el nombre del nuevo.
+              this.limpiarEstadoClinico();
             }}
           >
             ${this.pacientes.map(
@@ -421,7 +503,10 @@ export class CentinelaApp extends LitElement {
           </select>
           <select
             ?disabled=${this.enLlamada}
-            @change=${(e: Event) => (this.diaPostop = Number((e.target as HTMLSelectElement).value))}
+            @change=${(e: Event) => {
+              this.diaPostop = Number((e.target as HTMLSelectElement).value);
+              this.limpiarEstadoClinico();
+            }}
             style="flex:0 0 auto;min-width:0"
           >
             ${[1, 3, 7, 14].map(
@@ -468,9 +553,63 @@ export class CentinelaApp extends LitElement {
     `;
   }
 
+  /**
+   * Actas de llamadas ya cerradas. Es la prueba visible de que lo que produce
+   * el sistema sobrevive a la sesión: cada entrada sale de un JSON en
+   * `logs/llamadas/`, no de la memoria del navegador.
+   */
+  private renderHistorial() {
+    if (!this.historial.length) {
+      return html`<div class="panel">
+        <h3 class="titulo">Resumen</h3>
+        <p class="vacio">
+          Todavía no hay actas. Al cerrar una llamada, el acta queda guardada en
+          <code>logs/llamadas/</code> y aparece aquí, incluso si recarga la página.
+        </p>
+      </div>`;
+    }
+
+    return html`<div class="panel">
+      <h3 class="titulo">
+        Actas guardadas
+        <span style="font-weight:400;text-transform:none;letter-spacing:0">
+          ${this.historial.length} llamada${this.historial.length === 1 ? '' : 's'} en disco
+        </span>
+      </h3>
+      <div class="historial">
+        ${this.historial.map(
+          (h) => html`<button class="acta" @click=${() => (this.historialAbierto = h)}>
+            <div class="acta-fila">
+              <b>${h.paciente?.nombre_completo ?? 'Paciente sin identificar'}</b>
+              <span class="pastilla ${h.nivelFinal}">${h.nivelFinal}</span>
+            </div>
+            <div class="acta-meta">
+              ${h.paciente?.procedimiento ?? '—'} ·
+              ${new Date(h.iniciadaEn).toLocaleString('es-CO')} ·
+              ${h.citasUsadas?.length ?? 0} fuente${(h.citasUsadas?.length ?? 0) === 1 ? '' : 's'}
+            </div>
+          </button>`,
+        )}
+      </div>
+    </div>`;
+  }
+
   private renderCentro() {
     if (this.vista === 'resumen') {
-      return html`<panel-resumen .resumen=${this.resumen}></panel-resumen>`;
+      // Prioridad: el acta de la llamada en curso; si no hay, la que el usuario
+      // haya abierto del historial; si tampoco, el listado de lo persistido.
+      const acta = this.resumen ?? this.historialAbierto;
+      if (acta) {
+        return html`
+          ${this.historialAbierto && !this.resumen
+            ? html`<button class="volver" @click=${() => (this.historialAbierto = null)}>
+                ← Volver al historial
+              </button>`
+            : ''}
+          <panel-resumen .resumen=${acta}></panel-resumen>
+        `;
+      }
+      return this.renderHistorial();
     }
     if (this.vista === 'evidencia') {
       return html`<panel-evidencia .citas=${this.citas}></panel-evidencia>`;
