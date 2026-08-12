@@ -1,0 +1,16 @@
+{
+  "fecha": "2026-08-11T23:03:03.761Z",
+  "corpus": "../kit/dataset/textos",
+  "modeloEmbeddings": "Xenova/bge-m3",
+  "dim": 1024,
+  "documentos": 106,
+  "fragmentos": 6322,
+  "tokensEmbedding": 1723484,
+  "segundos": 4035.9,
+  "omitidos": [
+    {
+      "archivo": "REVISIÓN DE LA LITERATURA SOBRE LAAPENDICITIS AGUDA PEDIATRICA NO ESPECIFICADA EN EL PERI000 2000-2021.pdf",
+      "razon": "El PDF no tiene capa de texto (parece escaneado). Se requiere OCR previo."
+    }
+  ]
+}
