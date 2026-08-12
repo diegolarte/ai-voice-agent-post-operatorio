@@ -1,0 +1,45 @@
+{
+  "name": "centinela-postop",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Centinela — agente de voz en tiempo real para seguimiento postoperatorio con RAG clínico vivo y escalamiento asistencial. Tech Sphere Challenge 2026.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n SERVER,WEB -c cyan,magenta \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:server": "tsx watch server/index.ts",
+    "dev:web": "vite",
+    "build": "vite build",
+    "start": "concurrently -k -n SERVER,WEB -c cyan,magenta \"tsx server/index.ts\" \"vite preview --port 5173\"",
+    "ingest": "tsx scripts/ingest-corpus.ts",
+    "dataset": "tsx scripts/build-patients.ts",
+    "eval": "tsx scripts/eval-triage.ts",
+    "eval:retrieval": "tsx scripts/eval-retrieval.ts",
+    "metricas": "tsx scripts/report-metrics.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@google/genai": "^2.16.0",
+    "@huggingface/transformers": "^4.2.0",
+    "@lit/context": "^1.1.5",
+    "express": "^5.2.1",
+    "lit": "^3.3.0",
+    "multer": "^2.0.2",
+    "pdf-parse": "^1.1.1",
+    "three": "^0.176.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/multer": "^2.0.0",
+    "@types/node": "^22.14.0",
+    "@types/three": "^0.176.0",
+    "concurrently": "^9.1.2",
+    "tsx": "^4.19.2",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  }
+}

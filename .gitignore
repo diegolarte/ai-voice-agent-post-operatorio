@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.env
+.env.local
+*.log
+
+# Documentos subidos en caliente desde la consola (no se versionan)
+data/uploads/
+
+# Logs de sesión generados en runtime (se versiona sólo el .gitkeep)
+logs/*
+!logs/.gitkeep
+
+# El índice vectorial precomputado SÍ se versiona (ver README §Instalación):
+# data/index/  queda deliberadamente fuera de este .gitignore.
