@@ -206,4 +206,10 @@ export interface EventoLatencia {
   ts: string;
 }
 
-export type VistaUi = 'llamada' | 'evidencia' | 'triaje' | 'resumen' | 'consola';
+export type VistaUi =
+  | 'llamada'
+  | 'evidencia'
+  | 'triaje'
+  | 'resumen'
+  | 'consola'
+  | 'validacion';

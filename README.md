@@ -174,6 +174,11 @@ Ese 17.9 % es el costo deliberado de la asimetría clínica: 22 pacientes sanos
 revisados de más a cambio de no perder ninguno de los 37 que sí requerían
 atención. Detalle en `logs/eval-triaje.json`.
 
+**No hace falta correr nada para verlo:** la pestaña **Validación** de la
+interfaz muestra esta misma evaluación —matriz de confusión, sensibilidad y
+precisión por clase, y el costo asumido— leyendo ese informe, que viaja
+versionado en el repositorio. `npm run eval` lo regenera.
+
 > La evaluación aísla el motor de reglas alimentándolo con el cuadro clínico
 > real de cada caso. No mide el sondeo conversacional; mide la decisión dado lo
 > que se averiguó.

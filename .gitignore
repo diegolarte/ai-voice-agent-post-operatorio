@@ -11,5 +11,11 @@ data/uploads/
 logs/*
 !logs/.gitkeep
 
+# Excepción: el informe de la evaluación del triaje SÍ se versiona. Es la
+# evidencia de los 160 casos contra el ground truth, la consulta la interfaz
+# en la vista Validación, y sin él el jurado tendría que correr `npm run eval`
+# antes de poder ver nada. Se regenera con ese mismo comando.
+!logs/eval-triaje.json
+
 # El índice vectorial precomputado SÍ se versiona (ver README §Instalación):
 # data/index/  queda deliberadamente fuera de este .gitignore.

@@ -291,6 +291,27 @@ app.get('/api/llamadas', (_req, res) => res.json(llamadasStore.listarResumenes()
 
 app.get('/api/metricas', (_req, res) => res.json(agregadoGlobal()));
 
+/**
+ * Resultado de la evaluación offline del triaje contra el ground truth del
+ * dataset (`npm run eval`). Se expone para que la validación sea observable
+ * desde la interfaz y no sólo en la salida de una terminal.
+ */
+app.get('/api/evaluacion', (_req, res) => {
+  try {
+    const archivo = `${CONFIG.paths.logs}/eval-triaje.json`;
+    if (!fs.existsSync(archivo)) {
+      return res.json({ disponible: false });
+    }
+    const informe = JSON.parse(fs.readFileSync(archivo, 'utf8'));
+    res.json({ disponible: true, ...informe });
+  } catch (e) {
+    res.status(500).json({
+      disponible: false,
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+});
+
 // ---------------------------------------------------------------------------
 
 // El modelo de embeddings se precarga ANTES de abrir el puerto: la descarga

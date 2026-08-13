@@ -6,7 +6,9 @@ import './views/panel-slots.ts';
 import './views/panel-triaje.ts';
 import './views/panel-evidencia.ts';
 import './views/panel-resumen.ts';
+import './views/panel-validacion.ts';
 import './views/consola.ts';
+import type { InformeEvaluacion } from './views/panel-validacion.ts';
 import './visual-3d.ts';
 import type {
   Cita,
@@ -50,6 +52,9 @@ export class CentinelaApp extends LitElement {
    */
   @state() private historial: ResumenLlamada[] = [];
   @state() private historialAbierto: ResumenLlamada | null = null;
+
+  /** Evaluación offline del triaje contra el ground truth (`npm run eval`). */
+  @state() private evaluacion: InformeEvaluacion | null = null;
   @state() private transcripcion: LineaTranscripcion[] = [];
   @state() private latencias: number[] = [];
 
@@ -349,6 +354,11 @@ export class CentinelaApp extends LitElement {
       .catch(() => (this.error = 'No se pudo contactar el backend. ¿Está corriendo `npm run dev`?'));
 
     void this.cargarHistorial();
+
+    void fetch('/api/evaluacion')
+      .then((r) => r.json())
+      .then((e: InformeEvaluacion) => (this.evaluacion = e))
+      .catch(() => (this.evaluacion = { disponible: false }));
   }
 
   private async cargarHistorial(): Promise<void> {
@@ -378,8 +388,9 @@ export class CentinelaApp extends LitElement {
     this.transcripcion = [];
     this.latencias = [];
     this.historialAbierto = null;
-    // Las vistas clínicas quedarían vacías: se vuelve a la de llamada.
-    if (this.vista !== 'consola') this.vista = 'llamada';
+    // Sólo las vistas atadas al paciente quedarían vacías. Consola y validación
+    // no dependen de quién esté seleccionado, así que no se abandonan.
+    if (this.vista !== 'consola' && this.vista !== 'validacion') this.vista = 'llamada';
   }
 
   private async iniciarLlamada() {
@@ -595,6 +606,9 @@ export class CentinelaApp extends LitElement {
   }
 
   private renderCentro() {
+    if (this.vista === 'validacion') {
+      return html`<panel-validacion .informe=${this.evaluacion}></panel-validacion>`;
+    }
     if (this.vista === 'resumen') {
       // Prioridad: el acta de la llamada en curso; si no hay, la que el usuario
       // haya abierto del historial; si tampoco, el listado de lo persistido.
@@ -649,6 +663,7 @@ export class CentinelaApp extends LitElement {
       { id: 'evidencia', etiqueta: `Evidencia${this.citas.length ? ` (${this.citas.length})` : ''}` },
       { id: 'triaje', etiqueta: 'Triaje' },
       { id: 'resumen', etiqueta: 'Resumen' },
+      { id: 'validacion', etiqueta: 'Validación' },
       { id: 'consola', etiqueta: 'Consola' },
     ];
 
