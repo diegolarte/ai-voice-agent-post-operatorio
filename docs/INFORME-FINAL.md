@@ -182,6 +182,7 @@ sistema pensando.
 | Inyección de prompt desde la conversación o desde un documento subido | Fragmentos y texto del paciente entran delimitados y marcados como datos; el nivel de triaje lo fija el motor de reglas, que ningún texto puede alterar |
 | El modelo de voz inventa un valor de casilla | `sanearSlots()` descarta claves desconocidas y rangos imposibles antes de tocar el estado |
 | Preview del modelo retirado sin aviso | Modelo configurable por `.env`; el reto acepta el sucesor vigente de la misma familia |
+| **El agente suplanta a una EPS real.** El dataset trae la EPS de cada paciente (Sanitas, Sura, Compensar… todas empresas reales) y el prompt pedía "di de parte de quién llamas". El modelo hacía lo lógico: abrir con "llamo de parte de EPS Sanitas" — un agente de voz afirmando representar a una compañía que no lo respalda, que es justo la forma de un guion de *vishing*. | El prompt le prohíbe explícitamente presentarse como la EPS o cualquier empresa con nombre propio; se presenta como "Centinela, del servicio de seguimiento postoperatorio". La EPS se conserva en la ficha como dato administrativo para orientar la remisión, no como identidad. El dataset no se modificó: es el insumo estandarizado de evaluación |
 
 ---
 
