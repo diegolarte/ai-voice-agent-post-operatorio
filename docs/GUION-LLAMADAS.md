@@ -9,6 +9,13 @@ llamada corresponde a uno o varios momentos de ese guion.
 > (`server/clinical/redflags.ts`) y las preguntas clínicas recuperan del corpus
 > por encima del umbral 0.71, citando el documento que se anota.
 
+> **Nota:** la recuperación prioriza el procedimiento del paciente, así que las
+> citas salen de la guía que le corresponde. Cuando el corpus de su
+> procedimiento no cubre la pregunta, el sistema usa material transversal de
+> otra guía y lo **marca en pantalla** como "otro procedimiento" en vez de
+> presentarlo como propio. Si eso aparece en cámara no es un fallo: es el
+> sistema declarando de dónde sacó la respuesta.
+
 ## Cómo usar estos guiones
 
 - **Tú haces de paciente.** El agente lleva la conversación; esto es lo que le

@@ -42,6 +42,14 @@ export interface Cita {
   pagina: number;
   score: number;
   extracto: string;
+  /**
+   * La fuente pertenece a un procedimiento distinto al del paciente. Se marca
+   * en vez de ocultarse: parte del material postoperatorio es transversal
+   * (cuidado de herida, baño, reanudar actividad) y la guía de otro
+   * procedimiento suele ser la mejor disponible. Declararlo es más honesto que
+   * presentarla como propia. Ver `store.buscar`.
+   */
+  otroEscenario?: boolean;
 }
 
 // ---------------------------------------------------------------------------

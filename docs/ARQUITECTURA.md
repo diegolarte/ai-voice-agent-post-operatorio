@@ -98,7 +98,7 @@ flowchart TD
 
     E --> E1["El agente dice un relleno:<br/><i>«permítame que reviso»</i>"]
     E --> H["Embedding local de la consulta<br/>BGE-M3, 1024 dim"]
-    H --> I["Búsqueda coseno<br/>top-6, score ≥ 0.71<br/>máx. 2 fragmentos por documento"]
+    H --> I["Búsqueda coseno<br/>top-6, score ≥ 0.71<br/>máx. 2 fragmentos por documento<br/>prioriza el procedimiento del paciente"]
     I --> J{"¿Hay fragmentos<br/>por encima del umbral?"}
     J -->|no| K["<b>fuera_de_corpus</b><br/>declara el límite y ofrece escalar"]
     J -->|sí| L["Razonador: respuesta hablada<br/>+ IDs de fragmentos usados<br/>+ nivel propuesto"]

@@ -15,6 +15,36 @@ interface Manifest {
 }
 
 /**
+ * Traduce el procedimiento del paciente al escenario con el que está etiquetado
+ * el corpus. Son dos vocabularios distintos —el del dataset de pacientes y el
+ * de las carpetas de documentos— y esta es la única costura entre ambos.
+ *
+ * Devuelve `null` si no reconoce el procedimiento: en ese caso la búsqueda no
+ * prefiere ningún escenario y se comporta como antes, que es lo correcto ante
+ * un procedimiento desconocido.
+ */
+export function escenarioDeProcedimiento(procedimiento?: string | null): string | null {
+  if (!procedimiento) return null;
+  const p = procedimiento
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '');
+
+  if (p.includes('apendic')) return 'Apendicitis / apendicectomía';
+  if (p.includes('colecist') || p.includes('vesicula')) return 'Colecistitis / colecistectomía';
+  if (p.includes('mastectom') || p.includes('mama') || p.includes('cuello uterino')) {
+    return 'Oncología mama y cuello uterino';
+  }
+  if (p.includes('colectom') || p.includes('colorrectal') || p.includes('colon')) {
+    return 'Cáncer colorrectal';
+  }
+  if (p.includes('reemplazo') || p.includes('cadera') || p.includes('rodilla') || p.includes('artroplast')) {
+    return 'Reemplazo articular total';
+  }
+  return null;
+}
+
+/**
  * Índice vectorial en memoria con persistencia en disco.
  *
  * Se descartó ChromaDB a propósito: exige un servicio aparte (o un binario
@@ -85,8 +115,27 @@ class AlmacenVectorial {
     };
   }
 
-  /** Búsqueda por similitud coseno sobre todo el índice. */
-  buscar(consulta: Float32Array, topK = CONFIG.topK, minScore = CONFIG.minScore): Cita[] {
+  /**
+   * Búsqueda por similitud coseno.
+   *
+   * `escenarioPreferido` es el del procedimiento del paciente. No filtra: da
+   * prioridad. La razón es empírica — medido sobre el corpus, un filtro duro
+   * dejaba sin respuesta preguntas genéricas cuyo mejor material vive en la
+   * guía de otro procedimiento (p. ej. "¿cuándo me puedo bañar?" en una
+   * paciente de mastectomía se queda en 0.705, bajo el umbral, mientras que la
+   * guía de apendicectomía la responde a 0.793).
+   *
+   * Así que primero se agotan los fragmentos del procedimiento correcto y sólo
+   * si no alcanzan para el top-K se completa con el resto. Las citas de otro
+   * procedimiento se marcan con `otroEscenario` para que la interfaz —y el
+   * jurado— lo vean, en vez de presentar como propia una fuente que no lo es.
+   */
+  buscar(
+    consulta: Float32Array,
+    topK = CONFIG.topK,
+    minScore = CONFIG.minScore,
+    escenarioPreferido?: string | null,
+  ): Cita[] {
     this.cargar();
     if (this.chunks.length === 0) return [];
 
@@ -103,26 +152,39 @@ class AlmacenVectorial {
     // Diversidad por documento: sin esto un solo PDF extenso copa el top-K y el
     // agente cita seis fragmentos casi idénticos de la misma página.
     const porDoc = new Map<string, number>();
-    const citas: Cita[] = [];
-    for (const { i, score } of puntajes) {
-      const chunk = this.chunks[i];
-      const usados = porDoc.get(chunk.docId) ?? 0;
-      if (usados >= 2) continue;
-      const doc = this.documentos.get(chunk.docId);
-      if (!doc) continue;
 
-      porDoc.set(chunk.docId, usados + 1);
-      citas.push({
-        chunkId: chunk.id,
-        docId: chunk.docId,
-        documento: doc.titulo,
-        escenario: doc.escenario,
-        pagina: chunk.pagina,
-        score: Number(score.toFixed(4)),
-        extracto: chunk.texto,
-      });
-      if (citas.length >= topK) break;
-    }
+    const recoger = (soloPreferido: boolean, destino: Cita[]) => {
+      for (const { i, score } of puntajes) {
+        if (destino.length >= topK) return;
+        const chunk = this.chunks[i];
+        const doc = this.documentos.get(chunk.docId);
+        if (!doc) continue;
+
+        const coincide = !!escenarioPreferido && doc.escenario === escenarioPreferido;
+        if (soloPreferido !== coincide) continue;
+
+        const usados = porDoc.get(chunk.docId) ?? 0;
+        if (usados >= 2) continue;
+        porDoc.set(chunk.docId, usados + 1);
+
+        destino.push({
+          chunkId: chunk.id,
+          docId: chunk.docId,
+          documento: doc.titulo,
+          escenario: doc.escenario,
+          pagina: chunk.pagina,
+          score: Number(score.toFixed(4)),
+          extracto: chunk.texto,
+          ...(escenarioPreferido && !coincide ? { otroEscenario: true } : {}),
+        });
+      }
+    };
+
+    const citas: Cita[] = [];
+    // Sin escenario preferido el comportamiento es el de siempre: una sola
+    // pasada sobre todo el índice.
+    if (escenarioPreferido) recoger(true, citas);
+    recoger(false, citas);
 
     return citas;
   }

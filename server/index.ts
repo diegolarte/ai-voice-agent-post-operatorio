@@ -3,7 +3,7 @@ import multer from 'multer';
 import fs from 'node:fs';
 import { GoogleGenAI } from '@google/genai';
 import { CONFIG, ensureDirs, requireApiKey } from './config.ts';
-import { almacen } from './rag/store.ts';
+import { almacen, escenarioDeProcedimiento } from './rag/store.ts';
 import { embeberConsulta, contadorEmbeddings, precargarModelo } from './rag/embeddings.ts';
 import { ErrorIngesta, ingerir } from './rag/ingest.ts';
 import { razonar } from './clinical/reasoner.ts';
@@ -163,7 +163,14 @@ app.post('/api/consulta', async (req, res) => {
     const slots = llamadasStore.actualizarSlots(callId, sanearSlots(req.body?.slots));
 
     const vector = await embeberConsulta(pregunta);
-    const citas = almacen.buscar(vector);
+    // Se prioriza el material del procedimiento del paciente; si no alcanza,
+    // se completa con el resto marcándolo. Ver `store.buscar`.
+    const citas = almacen.buscar(
+      vector,
+      undefined,
+      undefined,
+      escenarioDeProcedimiento(llamada?.paciente?.procedimiento),
+    );
 
     const salida = await razonar({
       pregunta,

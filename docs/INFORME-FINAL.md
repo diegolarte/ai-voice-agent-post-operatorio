@@ -295,6 +295,7 @@ corpus, IDs de fragmentos usados, nivel y justificación para el personal.
 | `top_k` | 6 | Más fragmentos = más tokens = más latencia, sin ganancia observada |
 | Umbral de score | **0.71** | Calibrado con `npm run eval:retrieval` contra el corpus completo (106 docs, 6.322 fragmentos): 10 preguntas clínicas reales dieron scores entre 0.722–0.852; 10 preguntas ajenas al corpus ("¿precio del bitcoin?", "¿capital de Australia?"...) dieron 0.627–0.708. BGE-M3 distribuye el coseno más alto en todo el rango que `gemini-embedding-001` — el 0.55 original no separaba nada con este modelo. |
 | Máx. por documento | 2 | Sin esto, un PDF extenso copaba el top-6 con fragmentos casi idénticos |
+| Escenario | Preferencia, no filtro | Se agotan primero los fragmentos del procedimiento del paciente y sólo si no alcanzan se completa con el resto, marcado como `otroEscenario`. Medido: sin esto, en 6 de 7 consultas de prueba el mejor resultado venía de otro procedimiento (una pregunta sobre dolor de hombro tras colecistectomía citaba la guía de reemplazo de cadera). Con filtro **duro** se perdía cobertura en 2 de 7 —"¿cuándo me puedo bañar?" en mastectomía cae a 0.705, bajo el umbral— porque parte del material postoperatorio es transversal y la mejor fuente vive legítimamente en otra guía |
 | Dimensión | 1024 (nativa) | BGE-M3 no soporta truncamiento Matryoshka como `gemini-embedding-001`; se usa la salida completa del modelo, normalizada por el propio pipeline |
 
 ---

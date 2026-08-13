@@ -50,6 +50,20 @@ export class PanelEvidencia extends LitElement {
         color: var(--texto-tenue);
         margin-top: 3px;
       }
+      /* La fuente no es del procedimiento del paciente. Se declara en vez de
+         ocultarse: parte del material postoperatorio es transversal. */
+      .ajena {
+        display: inline-block;
+        margin-left: 6px;
+        padding: 1px 7px;
+        border-radius: 999px;
+        font-size: 0.68rem;
+        font-weight: 600;
+        color: var(--amarillo);
+        border: 1px solid color-mix(in srgb, var(--amarillo) 45%, transparent);
+        background: color-mix(in srgb, var(--amarillo) 12%, transparent);
+        cursor: help;
+      }
       .score {
         flex: none;
         font-family: ui-monospace, monospace;
@@ -112,7 +126,16 @@ export class PanelEvidencia extends LitElement {
                     <header>
                       <div>
                         <div class="doc">${c.documento}</div>
-                        <div class="meta">${c.escenario} · página ${c.pagina}</div>
+                        <div class="meta">
+                          ${c.escenario} · página ${c.pagina}
+                          ${c.otroEscenario
+                            ? html`<span
+                                class="ajena"
+                                title="El corpus del procedimiento de este paciente no cubría la pregunta; se usó material transversal de otro procedimiento."
+                                >otro procedimiento</span
+                              >`
+                            : ''}
+                        </div>
                       </div>
                       <span class="score">${c.score.toFixed(3)}</span>
                     </header>
