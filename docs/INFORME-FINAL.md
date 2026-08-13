@@ -46,6 +46,34 @@ La interfaz **se navega sola** durante la conversación: el agente llama a
 `navegar_interfaz` y la pantalla pasa a evidencia cuando cita una fuente, a
 triaje cuando detecta un signo de alarma, y a resumen cuando cierra.
 
+### Cómo encaja todo
+
+![Arquitectura de la solución](img/01-arquitectura.svg)
+
+Cada caja lleva la ruta del archivo que la implementa, para que sea contrastable
+contra el código. Lo que conversa (`gemini-2.5-flash-native-audio`) y lo que
+afirma contenido clínico (`gemini-2.5-flash-lite` sobre el corpus) son piezas
+distintas a propósito: el porqué está en §4. Los embeddings corren dentro del
+propio backend, sin salir a ninguna API.
+
+El diagrama es el mismo del entregable 02 —se genera desde
+[`ARQUITECTURA.md`](ARQUITECTURA.md), no se mantiene aparte— así que no puede
+desincronizarse de él.
+
+### Conocimiento vivo (compuerta G5)
+
+![Secuencia de conocimiento vivo](img/03-conocimiento-vivo.svg)
+
+Subir un documento lo deja disponible en la misma llamada, y eliminarlo lo borra
+del índice al instante — **sin reiniciar nada**. El identificador del documento
+es el SHA-256 de su contenido, así que volver a subir el mismo archivo lo
+actualiza en vez de duplicarlo, y la escritura del índice es atómica
+(`.tmp` + `rename`): un corte a mitad de guardado no deja al agente mudo.
+
+Que los embeddings corran localmente es lo que hace esto seguro de demostrar en
+vivo: no hay cuota de API que pueda estar agotada en el momento en que el jurado
+sube su documento de prueba (§3).
+
 ---
 
 ## 3. Modelos
@@ -202,6 +230,8 @@ Dos opiniones independientes sobre la criticidad, fusionadas por **máximo**:
 `nivel = max(reglas, razonador)`. No es un promedio ni una votación: **basta con
 que una de las dos detecte riesgo.** El modelo puede fallar y las reglas siguen
 ahí; las reglas pueden no cubrir un caso y el razonador con contexto sí.
+
+![Flujo de decisión del agente](img/02-flujo-decision.svg)
 
 ### Manejo de la ambigüedad
 
