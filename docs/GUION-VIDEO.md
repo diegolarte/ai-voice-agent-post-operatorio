@@ -198,7 +198,8 @@ npm run metricas
 > camino crítico: casi un segundo de silencio en plena conversación. Lo resolví
 > con *function calling* asíncrono: la herramienta es `NON_BLOCKING`, el prompt
 > obliga al agente a decir "permítame un segundo que reviso" antes de invocarla,
-> y la respuesta vuelve con `INTERRUPT` para cortar el relleno apenas está lista.
+> y la respuesta vuelve con `WHEN_IDLE`, que la entrega en cuanto el modelo está
+> libre sin cortarlo a mitad de palabra.
 > El usuario percibe una pausa conversacional, no un sistema pensando.
 >
 > El otro riesgo: que el razonador cite fragmentos inventados. Por eso el backend

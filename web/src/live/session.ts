@@ -347,8 +347,21 @@ export class SesionCentinela {
             fuentes: r.citas.map((c) => `${c.documento} (p. ${c.pagina})`),
             nivel: r.triaje.nivel,
           };
-          // Interrumpe el relleno conversacional para entregar ya la respuesta.
-          scheduling = FunctionResponseScheduling.INTERRUPT;
+          /**
+           * `WHEN_IDLE`, no `INTERRUPT`.
+           *
+           * INTERRUPT significa "interrumpe lo que estás haciendo": si el RAG
+           * tarda más que la frase de espera, el modelo ya terminó su turno y
+           * no hay generación que interrumpir, así que la respuesta se quedaba
+           * en el limbo — el agente decía "permítame un segundo que reviso" y
+           * se callaba hasta que el paciente volvía a hablar. Intermitente,
+           * porque dependía de si el RAG ganaba o perdía la carrera contra la
+           * frase de espera.
+           *
+           * WHEN_IDLE entrega en cuanto el modelo está libre, esté hablando o
+           * no, y de paso no lo corta a mitad de palabra.
+           */
+          scheduling = FunctionResponseScheduling.WHEN_IDLE;
           break;
         }
 

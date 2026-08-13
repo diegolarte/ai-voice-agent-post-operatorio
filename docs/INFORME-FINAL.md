@@ -194,11 +194,20 @@ Esta separación añade una llamada a un LLM en el camino crítico (~600–1200 
 Se paga con *function calling* asíncrono: la herramienta se declara
 `NON_BLOCKING`, el prompt obliga al agente a decir una frase de espera natural
 ("permítame un segundo que reviso su caso") justo antes de invocarla, y la
-respuesta vuelve con `scheduling: INTERRUPT` para cortar el relleno en cuanto
-está lista.
+respuesta vuelve con `scheduling: WHEN_IDLE`.
 
 El resultado es que el usuario percibe una pausa conversacional normal, no un
 sistema pensando.
+
+**El detalle que costó una depuración:** al principio la respuesta volvía con
+`scheduling: INTERRUPT`, que parece lo correcto —entregar la respuesta apenas
+esté lista— pero significa literalmente *"interrumpe lo que estás haciendo"*.
+Si el RAG tardaba más que la frase de espera, el modelo ya había terminado su
+turno y no había generación que interrumpir: la respuesta quedaba en el limbo y
+el agente se callaba hasta que el paciente volvía a hablar. El fallo era
+intermitente porque dependía de quién ganara la carrera, el RAG o la frase de
+espera. `WHEN_IDLE` entrega en cuanto el modelo está libre —esté hablando o
+no— y además no lo corta a mitad de palabra.
 
 ### Riesgos que identifiqué
 
