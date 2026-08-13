@@ -49,7 +49,28 @@ export const CONFIG = {
    * a la gama Flash (compuerta G3) y responde en ~1-1.5s sin configuración
    * especial.
    */
-  reasonerModel: process.env.REASONER_MODEL ?? 'gemini-2.5-flash-lite',
+  reasonerModel: process.env.REASONER_MODEL ?? 'gemini-3.5-flash-lite',
+
+  /**
+   * Modelos de reserva para el razonador, en orden.
+   *
+   * El nivel gratuito impone una cuota **diaria por modelo** que en algunos
+   * casos es de sólo 20 peticiones
+   * (`GenerateRequestsPerDayPerProjectPerModel-FreeTier`), y el `retryDelay`
+   * que devuelve el error engaña: sugiere esperar segundos cuando en realidad
+   * no se repone hasta el día siguiente. Cada modelo tiene su propia cuota, así
+   * que agotar uno no agota los demás.
+   *
+   * Todos son de la gama Flash de Gemini, así que la cadena no compromete la
+   * compuerta G3 sea cual sea el que acabe respondiendo.
+   */
+  reasonerFallbacks: (
+    process.env.REASONER_FALLBACKS ??
+    'gemini-3.1-flash-lite,gemini-2.5-flash-lite,gemini-flash-lite-latest,gemini-3-flash-preview'
+  )
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean),
   /**
    * BGE-M3 local (ONNX vía transformers.js) — libre según G3, sin cuota. Ver
    * la nota de cabecera en `server/rag/embeddings.ts` para el porqué del
