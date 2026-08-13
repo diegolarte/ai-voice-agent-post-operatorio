@@ -34,6 +34,7 @@ export class CentinelaApp extends LitElement {
   @state() private conectado = false;
   @state() private enLlamada = false;
   @state() private microfonoAbierto = false;
+  @state() private silenciado = false;
   @state() private estado = 'Seleccione un paciente para iniciar la llamada.';
   @state() private error = '';
   @state() private quienHabla: 'agente' | 'paciente' | 'nadie' = 'nadie';
@@ -420,6 +421,7 @@ export class CentinelaApp extends LitElement {
           this.resumen = r;
           this.enLlamada = false;
           this.microfonoAbierto = false;
+          this.silenciado = false;
           void this.cargarHistorial();
         },
         metricas: (ms) => (this.latencias = [...this.latencias, ms]),
@@ -436,6 +438,7 @@ export class CentinelaApp extends LitElement {
       await this.sesion.conectar();
       await this.sesion.iniciarMicrofono();
       this.microfonoAbierto = true;
+      this.silenciado = false;
     } catch (e) {
       this.error = e instanceof Error ? e.message : String(e);
       this.enLlamada = false;
@@ -450,18 +453,27 @@ export class CentinelaApp extends LitElement {
     }
     this.enLlamada = false;
     this.microfonoAbierto = false;
+    this.silenciado = false;
     this.sesion = null;
     void this.cargarHistorial();
   }
 
   private alternarMicrofono() {
     if (!this.sesion) return;
-    if (this.microfonoAbierto) {
-      this.sesion.detenerMicrofono();
-      this.microfonoAbierto = false;
-    } else {
-      void this.sesion.iniciarMicrofono().then(() => (this.microfonoAbierto = true));
+
+    // Primera apertura: hay que pedir permiso y montar el stream.
+    if (!this.microfonoAbierto) {
+      void this.sesion.iniciarMicrofono().then(() => {
+        this.microfonoAbierto = true;
+        this.silenciado = false;
+      });
+      return;
     }
+
+    // Ya montado: silenciar es instantáneo, sin soltar el micrófono ni volver
+    // a pedir permiso al navegador.
+    this.silenciado = !this.silenciado;
+    this.sesion.silenciar(this.silenciado);
   }
 
   private agregarLinea(hablante: 'agente' | 'paciente', texto: string) {
@@ -543,12 +555,17 @@ export class CentinelaApp extends LitElement {
               </button>`
             : html`
                 <button
-                  class="accion mic ${this.microfonoAbierto ? 'abierto' : ''}"
+                  class="accion mic ${this.microfonoAbierto && !this.silenciado ? 'abierto' : ''}"
                   @click=${this.alternarMicrofono}
+                  title="Deja de enviar audio sin colgar. Útil para hablar sin que el agente escuche."
                 >
-                  ${this.microfonoAbierto ? 'Micrófono abierto' : 'Abrir micrófono'}
+                  ${!this.microfonoAbierto
+                    ? 'Abrir micrófono'
+                    : this.silenciado
+                      ? '🔇 Silenciado · reactivar'
+                      : '🔴 Silenciar micrófono'}
                 </button>
-                <button class="accion colgar" @click=${this.colgar}>Colgar</button>
+                <button class="accion colgar" @click=${this.colgar}>Colgar y cerrar acta</button>
               `}
         </div>
 

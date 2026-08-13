@@ -523,6 +523,30 @@ export class SesionCentinela {
   }
 
   /**
+   * Silencia sin soltar el micrófono.
+   *
+   * `detenerMicrofono()` desmonta el stream, y volver a abrirlo hace que el
+   * navegador vuelva a pedir permiso: inservible para callarse un momento en
+   * mitad de una llamada. Aquí basta con dejar de enviar audio — el socket
+   * sigue vivo y la conversación no se pierde.
+   */
+  silenciar(valor: boolean): void {
+    if (!this.stream) return;
+    this.grabando = !valor;
+    if (valor) {
+      this.hablandoPaciente = false;
+      this.ev.hablando('nadie');
+      this.ev.estado('🔇 Micrófono silenciado — el agente no lo escucha.');
+    } else {
+      this.ev.estado('🔴 Micrófono abierto — hable con normalidad.');
+    }
+  }
+
+  get silenciado(): boolean {
+    return !!this.stream && !this.grabando;
+  }
+
+  /**
    * La sesión dejó de estar viva (cierre limpio, caída o error). Corta el
    * micrófono para que no siga empujando audio a un socket muerto, que es lo
    * que producía la cascada de "WebSocket is already in CLOSING or CLOSED".
