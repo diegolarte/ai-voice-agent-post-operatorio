@@ -12,14 +12,44 @@ import type { MetricasLlamada } from '../../shared/types.ts';
 export interface AcumuladorLlamada {
   callId: string;
   latencias: number[];
-  tokensEntradaLive: number;
-  tokensSalidaLive: number;
+  /**
+   * Lecturas crudas de `usageMetadata` de la Live API, sin agregar.
+   *
+   * No se suman al llegar porque la Live API las reporta **acumuladas para la
+   * sesión**, no como incremento del turno: sumarlas daba 135.034 tokens de
+   * entrada en una llamada de 441 s, cuando el techo físico del audio a
+   * ~25 tokens/s es de 11.025 — un exceso de 12x. Se guardan tal cual y se
+   * agregan al leerlas, decidiendo entonces cómo interpretarlas.
+   */
+  muestrasLive: { entrada: number; salida: number }[];
   tokensEntradaRazonador: number;
   tokensSalidaRazonador: number;
   tokensEmbeddings: number;
   invocacionesModelo: number;
   consultasRag: number;
   turnos: number;
+}
+
+/**
+ * Resuelve el consumo de la Live API a partir de las lecturas crudas.
+ *
+ * Detecta el formato en vez de asumirlo: si la serie no decrece, son valores
+ * acumulados y el total es el último; si fluctúa, son incrementos y se suman.
+ * Así el número sigue siendo correcto si el proveedor cambia la semántica.
+ */
+export function totalesLive(a: AcumuladorLlamada): { entrada: number; salida: number } {
+  const m = a.muestrasLive;
+  if (m.length === 0) return { entrada: 0, salida: 0 };
+
+  const acumulada = m.every((x, i) => i === 0 || x.entrada >= m[i - 1].entrada);
+  if (acumulada) {
+    const ultima = m[m.length - 1];
+    return { entrada: ultima.entrada, salida: ultima.salida };
+  }
+  return m.reduce(
+    (s, x) => ({ entrada: s.entrada + x.entrada, salida: s.salida + x.salida }),
+    { entrada: 0, salida: 0 },
+  );
 }
 
 const acumuladores = new Map<string, AcumuladorLlamada>();
@@ -30,8 +60,7 @@ export function acumulador(callId: string): AcumuladorLlamada {
     a = {
       callId,
       latencias: [],
-      tokensEntradaLive: 0,
-      tokensSalidaLive: 0,
+      muestrasLive: [],
       tokensEntradaRazonador: 0,
       tokensSalidaRazonador: 0,
       tokensEmbeddings: 0,
@@ -58,8 +87,10 @@ export function registrarUsoLive(
   salida: number,
 ): void {
   const a = acumulador(callId);
-  a.tokensEntradaLive += entrada;
-  a.tokensSalidaLive += salida;
+  a.muestrasLive.push({ entrada, salida });
+  // Se deja rastro crudo para que el número reportado sea auditable contra la
+  // sesión, que es lo que exige §5 de la rúbrica.
+  anexar('uso_live', { callId, entrada, salida, muestra: a.muestrasLive.length });
 }
 
 export function registrarConsultaRag(
@@ -91,9 +122,10 @@ export function percentil(valores: number[], p: number): number | null {
 export function costoUsd(a: AcumuladorLlamada): number {
   const p = CONFIG.precios;
   const M = 1_000_000;
+  const live = totalesLive(a);
   const total =
-    (a.tokensEntradaLive / M) * p.liveAudioEntrada +
-    (a.tokensSalidaLive / M) * p.liveAudioSalida +
+    (live.entrada / M) * p.liveAudioEntrada +
+    (live.salida / M) * p.liveAudioSalida +
     (a.tokensEntradaRazonador / M) * p.razonadorEntrada +
     (a.tokensSalidaRazonador / M) * p.razonadorSalida +
     (a.tokensEmbeddings / M) * p.embeddings;
@@ -102,12 +134,13 @@ export function costoUsd(a: AcumuladorLlamada): number {
 
 export function resumirLlamada(callId: string): MetricasLlamada {
   const a = acumulador(callId);
+  const live = totalesLive(a);
   return {
     turnos: a.turnos,
     latenciaP50Ms: percentil(a.latencias, 0.5),
     latenciaP95Ms: percentil(a.latencias, 0.95),
-    tokensEntrada: a.tokensEntradaLive + a.tokensEntradaRazonador,
-    tokensSalida: a.tokensSalidaLive + a.tokensSalidaRazonador,
+    tokensEntrada: live.entrada + a.tokensEntradaRazonador,
+    tokensSalida: live.salida + a.tokensSalidaRazonador,
     invocacionesModelo: a.invocacionesModelo,
     consultasRag: a.consultasRag,
     costoUsd: costoUsd(a),
@@ -129,8 +162,12 @@ export function agregadoGlobal() {
     invocacionesPorTurno: latencias.length
       ? Number((todas.reduce((n, a) => n + a.invocacionesModelo, 0) / latencias.length).toFixed(2))
       : null,
-    tokensEntradaPorLlamada: media(todas.map((a) => a.tokensEntradaLive + a.tokensEntradaRazonador)),
-    tokensSalidaPorLlamada: media(todas.map((a) => a.tokensSalidaLive + a.tokensSalidaRazonador)),
+    tokensEntradaPorLlamada: media(
+      todas.map((a) => totalesLive(a).entrada + a.tokensEntradaRazonador),
+    ),
+    tokensSalidaPorLlamada: media(
+      todas.map((a) => totalesLive(a).salida + a.tokensSalidaRazonador),
+    ),
     costoMedioUsd: costos.length
       ? Number((costos.reduce((n, c) => n + c, 0) / costos.length).toFixed(6))
       : null,
