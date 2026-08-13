@@ -160,7 +160,16 @@ class AlmacenVectorial {
         const doc = this.documentos.get(chunk.docId);
         if (!doc) continue;
 
-        const coincide = !!escenarioPreferido && doc.escenario === escenarioPreferido;
+        // Un documento subido en caliente no pertenece a ningún escenario del
+        // corpus: se etiqueta 'consola' porque el sistema no sabe a qué
+        // procedimiento corresponde. Si se le aplicara la preferencia jamás
+        // entraría al top-K —los fragmentos del procedimiento del paciente lo
+        // desplazan aunque puntúen más bajo— y el conocimiento vivo dejaría de
+        // funcionar, que es justo la compuerta G5. Así que compite por
+        // relevancia pura, en igualdad con el escenario preferido.
+        const esConocimientoVivo = doc.origen === 'consola';
+        const coincide =
+          esConocimientoVivo || (!!escenarioPreferido && doc.escenario === escenarioPreferido);
         if (soloPreferido !== coincide) continue;
 
         const usados = porDoc.get(chunk.docId) ?? 0;
