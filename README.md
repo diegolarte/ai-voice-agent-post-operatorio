@@ -12,7 +12,7 @@ enfermera.
 |---|---|
 | 02 · Diagrama de arquitectura y decisión | [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md) |
 | 03 · Informe final | [`docs/INFORME-FINAL.md`](docs/INFORME-FINAL.md) |
-| 04 · Video demo | ⚠️ **PENDIENTE — pegar URL antes de enviar** |
+| 04 · Video demo | [Ver el video](https://1drv.ms/v/c/d22053776a14c93f/IQBN3t46hdYhSqCMcATBY0gCASzja3TiJdFfcZbtOhZdTJo?e=6nJHL6) |
 
 ---
 
@@ -137,21 +137,43 @@ marca `t0` para poder medir.
 
 ### Resultados medidos
 
-> ⚠️ **PENDIENTE — ejecutar `npm run metricas` tras 3–5 llamadas reales y pegar
-> la tabla aquí antes de enviar.** Este bloque se deja vacío a propósito: la
-> rúbrica penaliza reportar números que no se sostienen contra los logs.
+Salida literal de `npm run metricas` sobre **31 llamadas reales** (211 turnos
+medidos, 39 consultas al corpus). Los números salen de `logs/metricas.jsonl` y
+`logs/llamadas/`: ejecutar el comando en este repositorio los reproduce.
 
 | Métrica | Valor |
 |---|---|
-| Latencia P50 | _(pendiente)_ |
-| Latencia P95 | _(pendiente)_ |
-| Tokens entrada / salida por turno | _(pendiente)_ |
-| Invocaciones al modelo por turno | _(pendiente)_ |
-| Consultas al RAG por llamada | _(pendiente)_ |
-| Costo estimado por llamada | _(pendiente)_ |
+| **Latencia P50** (fin de habla → primer audio) | **2.497 ms** |
+| **Latencia P95** | **6.109 ms** |
+| Latencia mínima / máxima | 510 / 20.421 ms |
+| Tokens de entrada por turno | 1.382 |
+| Tokens de salida por turno | 81 |
+| Tokens de entrada por llamada | 5.704 |
+| Tokens de salida por llamada | 336 |
+| Invocaciones al modelo por turno | 0.14 |
+| Consultas al RAG por llamada | 0.58 |
+| **Costo medio por llamada** | **$0.0177 USD** |
+| Costo máximo observado | $0.0880 USD |
+
+Desglose de la consulta clínica: latencia interna P50 2.182 ms, P95 9.553 ms,
+media de 0.87 citas devueltas. Desenlaces: 26 verdes, 5 rojos.
+
+**Qué incluye la muestra.** Las 31 son todas las llamadas registradas, sin
+descartar ninguna. Cinco de ellas se cortaron antes de intercambiar un solo
+turno (pruebas de micrófono durante la grabación); no aportan latencias, pero sí
+cuentan como llamada en los promedios por llamada. Contando sólo las 26 con
+conversación, los tokens de entrada por llamada suben a 6.801 y el costo medio a
+$0.0211. Se reporta la cifra completa porque es la que devuelve el comando.
 
 Los precios usados para estimar el costo están declarados como constantes
 auditables en [`server/config.ts › precios`](server/config.ts).
+
+> **Sobre cómo se mide la latencia.** `t0` es el instante en que deja de haber
+> voz, no el instante en que el sistema lo detecta: la ventana de 450 ms de
+> silencio queda **dentro** del número reportado, igual que el *endpointing* del
+> propio servidor de voz. Es una medición conservadora — mover `t0` al final de
+> esa ventana rebajaría el P50 en torno a medio segundo sin que el agente
+> respondiera ni un milisegundo antes.
 
 ### Calidad del triaje — sí medida
 
