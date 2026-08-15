@@ -397,15 +397,72 @@ Cinco cosas cambiaron de rumbo al construir:
 
 ## 10. Capturas
 
-> ⚠️ **PENDIENTE — insertar capturas antes de enviar.** Mínimo recomendado:
->
-> 1. Llamada en curso: casillas llenándose y transcripción.
-> 2. Panel de evidencia con una cita (documento + página + extracto).
-> 3. Semáforo en rojo con la regla disparada visible.
-> 4. Consola: documento recién subido con "procesado y disponible".
-> 5. El mismo documento eliminado y el agente declarando que no sabe.
-> 6. Acta final con métricas.
-> 7. Salida de `npm run eval` y de `npm run metricas`.
+Todas salen de llamadas reales de la sesión de grabación, no de maquetas.
+
+### La llamada en curso
+
+![Llamada en curso](img/capturas/01-llamada-en-curso.png)
+
+Edgar Rosero, apendicectomía, día 3. A la izquierda las casillas se van llenando
+solas mientras se conversa. Dos cosas que conviene mirar de cerca:
+
+El paciente dijo *"no me la he tomado, pero no he sentido calentura"*, y el
+sistema registró **`fiebre_referida: sensacion`** dejando la temperatura vacía —
+no dio por hecho que no hubiera fiebre. Por eso arriba dice **1 POR INDAGAR** y
+el panel de triaje advierte que falta una casilla núcleo: con ese hueco, el
+agente no puede cerrar la llamada como evolución esperada.
+
+### Trazabilidad: de dónde salió cada afirmación
+
+![Evidencia con dos citas](img/capturas/02-evidencia-dos-citas.png)
+
+Cuando el paciente preguntó cuándo podía bañarse, la interfaz saltó sola a
+Evidencia. Cada cita trae documento, escenario, **página** y el extracto textual
+que sustentó la respuesta, con su puntuación de similitud. Es verificable contra
+el PDF original.
+
+![Evidencia con tres citas](img/capturas/03-evidencia-tres-citas.png)
+
+Conforme avanza la llamada la evidencia se acumula. Las tres fuentes son del
+escenario *Apendicitis / apendicectomía*: la recuperación prioriza el
+procedimiento del paciente (§7), así que no cita guías de otra cirugía teniendo
+las propias.
+
+### El escalamiento
+
+![Triaje rojo con las reglas disparadas](img/capturas/05-triaje-rojo-reglas.png)
+
+Otra llamada: Ana Ángela Sánchez, colecistectomía, día 3. El semáforo pasó a
+rojo y la pantalla navegó sola a Triaje.
+
+No dice sólo "rojo": dice **qué regla** y **con qué valor**. `fiebre_alta` con
+`fiebre_c = 38.6`, `herida_purulenta` con `herida = secrecion_purulenta`, y
+`dolor_severo` con `dolor_nrs = 8`, cada una con su sospecha clínica. Una
+enfermera puede auditar la decisión sin abrir el código.
+
+Arriba se ven las dos opiniones por separado: **`reglas: rojo`** y
+**`razonador: verde`**. El razonador no vio gravedad; las reglas sí. Gana el
+máximo, y por eso escala. Es exactamente el caso para el que se diseñó la
+fusión asimétrica: si hubiera promediado, este paciente se va a la casa.
+
+### Lo que queda al colgar
+
+![Acta de la llamada](img/capturas/04-acta-de-la-llamada.png)
+
+El acta reúne lo que exige la rúbrica: identificación y procedimiento, síntomas
+reportados, decisión, próximos pasos, referencias usadas con su página, métricas
+de esa llamada concreta (P50, P95, turnos, consultas al RAG, tokens y costo) y la
+transcripción completa. Se persiste en `logs/llamadas/` y sobrevive a recargar la
+página.
+
+### La consola de conocimiento
+
+![Consola de conocimiento](img/capturas/06-consola-conocimiento.png)
+
+Un PDF externo al corpus procesándose en caliente. Abajo, el inventario completo
+con escenario, número de fragmentos y estado por documento, y el botón de
+eliminar que lo saca del índice al instante. Los embeddings corren en local, así
+que subir un documento no depende de ninguna cuota de API.
 
 ---
 
